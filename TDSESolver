@@ -1,0 +1,94 @@
+% This code is a MATLAB function solving a TDSE for an electron in 1D.
+% The code is written in  atomic unit.
+% 
+% Input and Output Variables:
+% Psi_output is the wavefunction after the propagation
+% HHG_spec is the high-order harmonic spectrum during its propagation. Basically Fourier transformation of dipole acceleration of the wavefunction from time domain to spectral domain.
+% HHG_time is the dipole acceleration of the wavefunction during the propagation in time domain.
+%
+% Psi is the wavefunction input.
+% V is the static potential of the wavefunction.
+% E is the external electric field exerted to the wavefunction.
+% tint is the initial time index when the propagation starts. (It is an index, not a specific time)
+% tend is the final time index when the propagation ends. (It is an index, not a specific time)
+% dt is the time step used in the propagation.
+%
+%
+% Contents of the function
+
+[Psi_output, HHG_spec, HHG_time] = CN_1D_Propagator_HHG_LengthGauge(Psi,V,E,tint,tend,x,dt)
+
+% initializing
+Psi_output = complex(Psi);
+
+dx = x(2) - x(1);
+Nx = length(x);
+
+% dVdx is the force due to the static potential that will be used for calculating HHG_time
+dVdx = zeros(size(x));
+
+% midpoint differentiation
+dVdx(1:end-1) = real(diff(V)/dx);
+dVdx(end) = dVdx(end-1);
+dVdx = interp1(x,dVdx,x-dx/2);
+dVdx(isnan(dVdx)) = 0;
+
+HHG_time = zeros(size(E));
+
+% V_prop is the time dependent potential. static potential + time dependent interaction
+V_prop = complex(zeros(size(Psi)));
+
+% Dl, Dm, Du are the 1st lower diagonal, the main diagonal, and the 1st upper diagonal of the 3-point differentiating matrix for kinetic energy term, respectively.
+Dl =    ones(1,Nx-1)/dx^2;
+Dm = -2*ones(1,Nx  )/dx^2;
+Du =    ones(1,Nx-1)/dx^2;
+
+% Likewise, l, m, and u denotes 1st lower, main, and 1st upper diagonals of M.
+% M is used for boosting accuracy upto 4th order.
+Ml =     Dl*dx^2/12;
+Mm = 1 + Dm*dx^2/12;
+Mu =     Du*dx^2/12;
+
+% Iteration loop
+for kdx = tint:tend
+    % V_prop is updated
+    V_prop = V + E(kdx)*x;
+    
+    % defining propagator for half step forward
+    dlf = Ml - 1i*dt/2*(-Dl/2 + Ml.*V_prop(1:end-1));
+    dmf = Mm - 1i*dt/2*(-Dm/2 + Mm.*V_prop         );
+    duf = Mu - 1i*dt/2*(-Du/2 + Mu.*V_prop(2:end)  );
+    
+    % defining propagator for half step backward
+    dlb = Ml + 1i*dt/2*(-Dl/2 + Ml.*V_prop(1:end-1));
+    dmb = Mm + 1i*dt/2*(-Dm/2 + Mm.*V_prop         );
+    dub = Mu + 1i*dt/2*(-Du/2 + Mu.*V_prop(2:end)  );
+    
+    % main propagating part, Crank-Nicolson Scheme. Half step forward, and half step inverse backward.
+    % half step forward
+    Psi_output = tridiag_leftmult(Psi_output, dlf, dmf, duf);
+    
+    % half step inverse backward in Forward-Backward substitution. Thomas algorithm.
+    Psi_output = FBsubstitution(  Psi_output, dlb, dmb, dub);
+    
+    % rough normalization
+    Psi_output = Psi_output/max(abs(Psi_output));
+    
+    % dipole acceleration of the wavefunction after one step of propagation
+    HHG_time(kdx) = - sum(abs(Psi_output).^2.*dVdx)*dx;
+end
+
+% frequency domain
+w0 = linspace(-pi,pi,length(E))/real(dt);
+
+% Fourier transformation
+HHG_Spectemp = fftshift(fft(ifftshift(HHG_time)))/(2*pi)^2/137.03599976^3;
+
+% cutting the spectrum. You can remove this part.
+w0logic = 0 <= w0 & w0 < 7.34986504953569;
+
+% high-order harmonic spectrum.
+HHG_spec = HHG_Spectemp(w0logic);
+
+% normalization of the total probability to one.
+Psi_output = Psi_output/sqrt(sum(abs(Psi_output).^2));
