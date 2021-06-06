@@ -1,0 +1,27 @@
+function output_vector = FBsubstitution( input_vector, lower_input, main_input, upper_input )
+
+% Forward-Backward substitution for tridiagonal matrix
+
+output_vector = complex(zeros(size(input_vector)));
+
+main_f = complex(zeros(size(main_input)));
+input_f = complex(zeros(size(input_vector)));
+
+main_f(1) = main_input(1);
+input_f(1) = input_vector(1);
+
+% forward substitution
+for fdx = 2:length(input_vector)
+    main_f(fdx) = main_input(fdx) - lower_input(fdx-1)*upper_input(fdx-1)/main_f(fdx-1);
+    input_f(fdx) = input_vector(fdx) - lower_input(fdx-1)*input_f(fdx-1)/main_f(fdx-1);
+end
+
+% backward substitution
+
+output_vector(end) = input_f(end)/main_f(end);
+
+for fdx = length(input_vector)-1:-1:1
+    output_vector(fdx) = (input_f(fdx)-upper_input(fdx)*output_vector(fdx+1))/main_f(fdx);
+end
+
+end
