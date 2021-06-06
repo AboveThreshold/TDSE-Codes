@@ -1,0 +1,20 @@
+%
+% output_vector is the resulting vector after the multiplication
+% input_vector is the original vector before the multiplication
+% lower_input is the lower diagonal of the tridiagonal matrix
+% main_input is the main diagonal
+% upper_input is the upper diagonal
+%
+
+function [ output_vector ] = tridiag_leftmult( input_vector, lower_input, main_input, upper_input )
+
+output_vector = complex(zeros(size(input_vector)));
+
+output_vector(1) = input_vector(1)*main_input(1) + input_vector(2)*upper_input(1);
+output_vector(end) = input_vector(end)*main_input(end) + input_vector(end-1)*lower_input(end);
+
+parfor fdx = 2:length(input_vector)-1
+    output_vector(fdx) = input_vector(fdx-1)*lower_input(fdx-1) + input_vector(fdx)*main_input(fdx) + input_vector(fdx+1)*upper_input(fdx);
+end
+
+end
